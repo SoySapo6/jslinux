@@ -234,5 +234,22 @@ function save_root_bin() {
     };
 }
 
+function save_root_bin() {
+    var ramdisk = pc.get_ramdisk_image();
+    const transaction = db.transaction(["files"], "readwrite");
+    const objectStore = transaction.objectStore("files");
+    const request = objectStore.put({ name: "root.bin", data: ramdisk });
+
+    request.onsuccess = () => {
+        console.log("root.bin saved to IndexedDB");
+        alert("Saved!");
+    };
+
+    request.onerror = (event) => {
+        console.error("Could not save root.bin to IndexedDB:", event.target.error);
+        alert("Could not save: " + event.target.error);
+    };
+}
+
 init_db();
 term_start();
