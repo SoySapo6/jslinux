@@ -8,11 +8,29 @@
 */
 "use strict";
 
-var term, pc, boot_start_time;
+var term, pc, boot_start_time, db;
+
+function init_db() {
+    const request = indexedDB.open("JSLinuxDB", 1);
+
+    request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        db.createObjectStore("files", { keyPath: "name" });
+    };
+
+    request.onsuccess = (event) => {
+        db = event.target.result;
+        console.log("IndexedDB initialized");
+    };
+
+    request.onerror = (event) => {
+        console.error("IndexedDB error:", event.target.error);
+    };
+}
 
 function term_start()
 {
-    term = new Term(80, 30, term_handler);
+    term = new Term(null, null, term_handler);
 
     term.open();
 }
@@ -53,7 +71,7 @@ function get_boot_time()
 /* global to hold binary data from async XHR requests */
 var binaries = [false,false,false];
 
-function loadbinary(url,slot) {
+function loadbinary(url, slot, save_local) {
     var req, binary_array, len, typed_arrays_exist;
 
     req = new XMLHttpRequest();
@@ -75,19 +93,32 @@ function loadbinary(url,slot) {
     };
 
     req.onload = function (e) {
-      console.log('onload triggered');
+      console.log('onload triggered for ' + url);
       if (req.readyState === 4) {
         if (req.status === 200) {
+            var data;
           if (typed_arrays_exist && 'mozResponse' in req) {
-            binaries[slot] = req.mozResponse;
+            data = req.mozResponse;
           } else if (typed_arrays_exist && req.mozResponseArrayBuffer) {
-            binaries[slot] = req.mozResponseArrayBuffer;
+            data = req.mozResponseArrayBuffer;
           } else if ('responseType' in req) {
-            binaries[slot] = req.response;
+            data = req.response;
           } else {
-            binaries[slot] = req.responseText;
+            data = req.responseText;
           }
-          //cb_f()
+          binaries[slot] = data;
+
+          if (save_local && data instanceof ArrayBuffer) {
+              const transaction = db.transaction(["files"], "readwrite");
+              const objectStore = transaction.objectStore("files");
+              const request = objectStore.put({ name: url, data: data });
+              request.onsuccess = () => {
+                  console.log(url + " saved to IndexedDB");
+              };
+              request.onerror = (event) => {
+                  console.error("Could not save " + url + " to IndexedDB:", event.target.error);
+              };
+          }
         } else {
           throw "Error while loading " + url;
         }
@@ -110,7 +141,32 @@ function checkbinaries() {
 function load_binaries() {
     console.log("requesting binaries");
     loadbinary("vmlinux-2.6.20.bin", 0);
-    loadbinary("root.bin", 1);
+
+    if (db) {
+        const transaction = db.transaction(["files"], "readonly");
+        const objectStore = transaction.objectStore("files");
+        const request = objectStore.get("root.bin");
+
+        request.onsuccess = (event) => {
+            if (event.target.result) {
+                console.log("loading root.bin from IndexedDB");
+                binaries[1] = event.target.result.data;
+            } else {
+                console.log("loading root.bin from server");
+                loadbinary("root.bin", 1, true);
+            }
+        };
+
+        request.onerror = (event) => {
+            console.error("Error loading root.bin from IndexedDB:", event.target.error);
+            console.log("loading root.bin from server");
+            loadbinary("root.bin", 1, true);
+        };
+    } else {
+        setTimeout(load_binaries, 100);
+        return;
+    }
+
     loadbinary("linuxstart.bin", 2);
 
     console.log("waiting for binaries to finish loading...");
@@ -159,6 +215,24 @@ function start()
     boot_start_time = (+new Date());
 
     pc.start();
+
+    setInterval(save_root_bin, 10000);
 }
 
+function save_root_bin() {
+    var ramdisk = pc.get_ramdisk_image();
+    const transaction = db.transaction(["files"], "readwrite");
+    const objectStore = transaction.objectStore("files");
+    const request = objectStore.put({ name: "root.bin", data: ramdisk });
+
+    request.onsuccess = () => {
+        console.log("root.bin saved to IndexedDB");
+    };
+
+    request.onerror = (event) => {
+        console.error("Could not save root.bin to IndexedDB:", event.target.error);
+    };
+}
+
+init_db();
 term_start();

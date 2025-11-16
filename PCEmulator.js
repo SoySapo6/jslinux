@@ -36,7 +36,17 @@ function PCEmulator(params) {
     cpu.get_hard_intno = this.pic.get_hard_intno.bind(this.pic);
 }
 
-PCEmulator.prototype.load_binary = function(binary_array, mem8_loc) { return this.cpu.load_binary(binary_array, mem8_loc); };
+PCEmulator.prototype.load_binary = function(binary_array, mem8_loc) {
+    var ret = this.cpu.load_binary(binary_array, mem8_loc);
+    if (mem8_loc == 0x00400000) { // location of ramdisk
+        this.ramdisk_size = ret;
+    }
+    return ret;
+};
+
+PCEmulator.prototype.get_ramdisk_image = function() {
+    return this.cpu.phys_mem.slice(0x00400000, 0x00400000 + this.ramdisk_size);
+};
 
 PCEmulator.prototype.start = function() { setTimeout(this.timer_func.bind(this), 10); };
 
