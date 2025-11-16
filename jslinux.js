@@ -53,7 +53,7 @@ function get_boot_time()
 /* global to hold binary data from async XHR requests */
 var binaries = [false,false,false];
 
-function loadbinary(url,slot) {
+function loadbinary(url, slot, save_local) {
     var req, binary_array, len, typed_arrays_exist;
 
     req = new XMLHttpRequest();
@@ -75,19 +75,34 @@ function loadbinary(url,slot) {
     };
 
     req.onload = function (e) {
-      console.log('onload triggered');
+      console.log('onload triggered for ' + url);
       if (req.readyState === 4) {
         if (req.status === 200) {
+            var data;
           if (typed_arrays_exist && 'mozResponse' in req) {
-            binaries[slot] = req.mozResponse;
+            data = req.mozResponse;
           } else if (typed_arrays_exist && req.mozResponseArrayBuffer) {
-            binaries[slot] = req.mozResponseArrayBuffer;
+            data = req.mozResponseArrayBuffer;
           } else if ('responseType' in req) {
-            binaries[slot] = req.response;
+            data = req.response;
           } else {
-            binaries[slot] = req.responseText;
+            data = req.responseText;
           }
-          //cb_f()
+          binaries[slot] = data;
+
+          if (save_local && data instanceof ArrayBuffer) {
+              var u8a = new Uint8Array(data);
+              var str = '';
+              for (var i = 0; i < u8a.length; i++) {
+                  str += String.fromCharCode(u8a[i]);
+              }
+              try {
+                localStorage.setItem(url, str);
+                console.log(url + " saved to localStorage");
+              } catch (ex) {
+                console.log("Could not save " + url + " to localStorage: " + ex);
+              }
+          }
         } else {
           throw "Error while loading " + url;
         }
@@ -110,7 +125,20 @@ function checkbinaries() {
 function load_binaries() {
     console.log("requesting binaries");
     loadbinary("vmlinux-2.6.20.bin", 0);
-    loadbinary("root.bin", 1);
+
+    var root_bin_str = localStorage.getItem("root.bin");
+    if (root_bin_str) {
+        console.log("loading root.bin from localStorage");
+        var root_bin_u8a = new Uint8Array(root_bin_str.length);
+        for (var i = 0; i < root_bin_str.length; i++) {
+            root_bin_u8a[i] = root_bin_str.charCodeAt(i);
+        }
+        binaries[1] = root_bin_u8a.buffer;
+    } else {
+        console.log("loading root.bin from server");
+        loadbinary("root.bin", 1, true);
+    }
+
     loadbinary("linuxstart.bin", 2);
 
     console.log("waiting for binaries to finish loading...");
@@ -159,6 +187,23 @@ function start()
     boot_start_time = (+new Date());
 
     pc.start();
+}
+
+function save_root_bin() {
+    var ramdisk = pc.get_ramdisk_image();
+    var u8a = new Uint8Array(ramdisk);
+    var str = '';
+    for (var i = 0; i < u8a.length; i++) {
+        str += String.fromCharCode(u8a[i]);
+    }
+    try {
+        localStorage.setItem("root.bin", str);
+        console.log("root.bin saved to localStorage");
+        alert("Saved!");
+    } catch (ex) {
+        console.log("Could not save root.bin to localStorage: " + ex);
+        alert("Could not save: " + ex);
+    }
 }
 
 term_start();
