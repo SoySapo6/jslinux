@@ -30,7 +30,7 @@ function init_db() {
 
 function term_start()
 {
-    term = new Term(80, 30, term_handler);
+    term = new Term(null, null, term_handler);
 
     term.open();
 }
@@ -215,6 +215,23 @@ function start()
     boot_start_time = (+new Date());
 
     pc.start();
+
+    setInterval(save_root_bin, 10000);
+}
+
+function save_root_bin() {
+    var ramdisk = pc.get_ramdisk_image();
+    const transaction = db.transaction(["files"], "readwrite");
+    const objectStore = transaction.objectStore("files");
+    const request = objectStore.put({ name: "root.bin", data: ramdisk });
+
+    request.onsuccess = () => {
+        console.log("root.bin saved to IndexedDB");
+    };
+
+    request.onerror = (event) => {
+        console.error("Could not save root.bin to IndexedDB:", event.target.error);
+    };
 }
 
 function save_root_bin() {

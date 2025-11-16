@@ -19,9 +19,12 @@ if (!Function.prototype.bind) {
     };
 }
 function Term(fa, ga, ha) {
-    this.w = fa;
-    this.h = ga;
-    this.cur_h = ga;
+    var char_width = 8.4;
+    var char_height = 14;
+
+    this.w = Math.floor(window.innerWidth / char_width);
+    this.h = Math.floor(window.innerHeight / char_height);
+    this.cur_h = this.h;
     this.tot_h = 1000;
     this.y_base = 0;
     this.y_disp = 0;
@@ -58,11 +61,55 @@ Term.prototype.open = function() {
     this.refresh(0, this.h - 1);
     document.addEventListener("keydown", this.keyDownHandler.bind(this), true);
     document.addEventListener("keypress", this.keyPressHandler.bind(this), true);
+
+    const keyboardInput = document.getElementById("keyboard-input");
+    document.body.addEventListener("click", () => {
+        keyboardInput.focus();
+    });
+
+    keyboardInput.addEventListener("input", (e) => {
+        this.handler(e.target.value);
+        e.target.value = "";
+    });
+
+    window.addEventListener("resize", this.resize.bind(this));
+
     ja = this;
     setInterval(function() {
         ja.cursor_timer_cb();
     }, 1000);
 };
+
+Term.prototype.resize = function() {
+    var char_width = 8.4;
+    var char_height = 14;
+
+    var new_w = Math.floor(window.innerWidth / char_width);
+    var new_h = Math.floor(window.innerHeight / char_height);
+
+    if (new_w === this.w && new_h === this.h) {
+        return;
+    }
+
+    var new_lines = [];
+    var c = 32 | (this.def_attr << 16);
+
+    for (var y = 0; y < new_h; y++) {
+        var new_line = new Array(new_w);
+        var old_line = this.lines[y] || [];
+        for (var x = 0; x < new_w; x++) {
+            new_line[x] = old_line[x] || c;
+        }
+        new_lines.push(new_line);
+    }
+
+    this.w = new_w;
+    this.h = new_h;
+    this.cur_h = new_h;
+    this.lines = new_lines;
+
+    this.refresh(0, this.h - 1);
+}
 Term.prototype.refresh = function(ka, la) {
     var ma, y, ia, na, c, w, i, oa, pa, qa, ra, sa, ta;
     for (y = ka; y <= la; y++) {
@@ -478,6 +525,11 @@ Term.prototype.keyDownHandler = function(event) {
 };
 Term.prototype.keyPressHandler = function(event) {
     var char, charcode;
+
+    if (event.target.id === "keyboard-input") {
+        return true;
+    }
+
     if (event.stopPropagation)
         event.stopPropagation();
     if (event.preventDefault)
