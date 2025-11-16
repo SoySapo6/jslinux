@@ -19,9 +19,12 @@ if (!Function.prototype.bind) {
     };
 }
 function Term(fa, ga, ha) {
-    this.w = fa;
-    this.h = ga;
-    this.cur_h = ga;
+    var char_width = 8.4;
+    var char_height = 14;
+
+    this.w = Math.floor(window.innerWidth / char_width);
+    this.h = Math.floor(window.innerHeight / char_height);
+    this.cur_h = this.h;
     this.tot_h = 1000;
     this.y_base = 0;
     this.y_disp = 0;
@@ -58,11 +61,39 @@ Term.prototype.open = function() {
     this.refresh(0, this.h - 1);
     document.addEventListener("keydown", this.keyDownHandler.bind(this), true);
     document.addEventListener("keypress", this.keyPressHandler.bind(this), true);
+
+    document.body.addEventListener("click", () => {
+        document.getElementById("keyboard-input").focus();
+    });
+
+    window.addEventListener("resize", this.resize.bind(this));
+
     ja = this;
     setInterval(function() {
         ja.cursor_timer_cb();
     }, 1000);
 };
+
+Term.prototype.resize = function() {
+    var char_width = 8.4;
+    var char_height = 14;
+
+    this.w = Math.floor(window.innerWidth / char_width);
+    this.h = Math.floor(window.innerHeight / char_height);
+    this.cur_h = this.h;
+
+    var y, ia, i, c;
+    this.lines = new Array();
+    c = 32 | (this.def_attr << 16);
+    for (y = 0; y < this.cur_h; y++) {
+        ia = new Array();
+        for (i = 0; i < this.w; i++)
+            ia[i] = c;
+        this.lines[y] = ia;
+    }
+
+    this.refresh(0, this.h - 1);
+}
 Term.prototype.refresh = function(ka, la) {
     var ma, y, ia, na, c, w, i, oa, pa, qa, ra, sa, ta;
     for (y = ka; y <= la; y++) {
@@ -387,6 +418,11 @@ Term.prototype.writeln = function(char) {
 };
 Term.prototype.keyDownHandler = function(event) {
     var char;
+
+    if (event.target.id === "keyboard-input") {
+        return true;
+    }
+
     char = "";
     switch (event.keyCode) {
         case 8:
